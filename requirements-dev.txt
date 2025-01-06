@@ -1,0 +1,3 @@
+# -r requirements.txt
+homeassistant==2025.1.0
+reactivex==4.0.4

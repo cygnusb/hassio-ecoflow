@@ -38,10 +38,12 @@ async def to_task(src: Observable[_T]):
 
 
 async def request(tcp: RxTcpAutoConnection, req: bytes, res: Observable[_T]) -> _T:
-    t = to_task(res.pipe(
-        ops.timeout(5, throw(TimeoutError())),
-        ops.first(),
-    ))
+    t = to_task(
+        res.pipe(
+            ops.timeout(5, throw(TimeoutError())),
+            ops.first(),
+        )
+    )
     try:
         tcp.write(req)
     except BaseException as ex:
@@ -147,7 +149,8 @@ class HassioEcoFlowClient:
             self.__disconnected = event.async_track_point_in_utc_time(
                 hass,
                 _disconnected,
-                utcnow().replace(microsecond=0) + (DISCONNECT_TIME + timedelta(seconds=1)),
+                utcnow().replace(microsecond=0)
+                + (DISCONNECT_TIME + timedelta(seconds=1)),
             )
 
         def end_timer(ex=None):
@@ -156,38 +159,47 @@ class HassioEcoFlowClient:
                 self.disconnected.on_error(ex)
             else:
                 self.disconnected.on_completed()
+
         self.received.subscribe(reset_timer, end_timer, end_timer)
 
         def pd_updated(data: dict[str, Any]):
             self.diagnostics["pd"] = data
             self.device_info_main["model"] = ef.get_model_name(
-                self.product, data["model"])
+                self.product, data["model"]
+            )
             dr.async_get_or_create(
                 config_entry_id=entry.entry_id,
                 **self.device_info_main,
             )
-            if self.__extra_connected != ef.has_extra(self.product, data.get("model", None)):
+            if self.__extra_connected != ef.has_extra(
+                self.product, data.get("model", None)
+            ):
                 self.__extra_connected = not self.__extra_connected
                 if not self.__extra_connected:
                     self.disconnected.on_next(1)
+
         self.pd.subscribe(pd_updated)
 
         def bms_updated(data: tuple[int, dict[str, Any]]):
             if "bms" not in self.diagnostics:
                 self.diagnostics["bms"] = dict[str, Any]()
             self.diagnostics["bms"][data[0]] = data[1]
+
         self.bms.subscribe(bms_updated)
 
         def ems_updated(data: dict[str, Any]):
             self.diagnostics["ems"] = data
+
         self.ems.subscribe(ems_updated)
 
         def inverter_updated(data: dict[str, Any]):
             self.diagnostics["inverter"] = data
+
         self.inverter.subscribe(inverter_updated)
 
         def mppt_updated(data: dict[str, Any]):
             self.diagnostics["mppt"] = data
+
         self.mppt.subscribe(mppt_updated)
 
     async def close(self):
@@ -226,7 +238,14 @@ class EcoFlowBaseEntity(Entity):
 
 
 class EcoFlowEntity(EcoFlowBaseEntity):
-    def __init__(self, client: HassioEcoFlowClient, src: Observable[dict[str, Any]], key: str, name: str, bms_id: Optional[int] = None):
+    def __init__(
+        self,
+        client: HassioEcoFlowClient,
+        src: Observable[dict[str, Any]],
+        key: str,
+        name: str,
+        bms_id: Optional[int] = None,
+    ):
         super().__init__(client, bms_id)
         self._key = key
         self._src = src
@@ -272,7 +291,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     client = HassioEcoFlowClient(hass, entry)
 
     hass.data[DOMAIN][entry.entry_id] = client
-    hass.config_entries.async_setup_platforms(entry, _PLATFORMS)
+    hass.async_create_task(
+        hass.config_entries.async_forward_entry_setups(entry, _PLATFORMS)
+    )
     return True
 
 
