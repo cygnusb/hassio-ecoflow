@@ -234,7 +234,7 @@ class EcoFlowBaseEntity(Entity):
         self._connected = False
         if self._attr_available:
             self._attr_available = False
-            self.async_write_ha_state()
+            self.hass.loop.call_soon_threadsafe(self.async_write_ha_state)
 
 
 class EcoFlowEntity(EcoFlowBaseEntity):
@@ -259,7 +259,7 @@ class EcoFlowEntity(EcoFlowBaseEntity):
     def __updated(self, data: dict[str, Any]):
         self._attr_available = True
         self._on_updated(data)
-        self.async_write_ha_state()
+        self.hass.loop.call_soon_threadsafe(self.async_write_ha_state)
 
     def _on_updated(self, data: dict[str, Any]):
         pass
@@ -281,7 +281,9 @@ class EcoFlowConfigEntity(EcoFlowBaseEntity):
     def __updated(self, data):
         if not self._connected:
             self._connected = True
-            self.async_schedule_update_ha_state(True)
+            self.hass.loop.call_soon_threadsafe(
+                self.async_schedule_update_ha_state, True
+            )
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
