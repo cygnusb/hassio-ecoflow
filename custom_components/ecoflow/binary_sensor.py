@@ -1,44 +1,72 @@
 from typing import Any
 
 import reactivex.operators as ops
-from homeassistant.components.binary_sensor import (BinarySensorDeviceClass,
-                                                    BinarySensorEntity)
+from homeassistant.components.binary_sensor import (
+    BinarySensorDeviceClass,
+    BinarySensorEntity,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import (DOMAIN, EcoFlowBaseEntity, EcoFlowEntity, HassioEcoFlowClient,
-               select_bms)
+from . import DOMAIN, EcoFlowBaseEntity, EcoFlowEntity, HassioEcoFlowClient, select_bms
 from .ecoflow import is_delta, is_power_station, is_river
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+):
     client: HassioEcoFlowClient = hass.data[DOMAIN][entry.entry_id]
     entities = []
 
     if is_power_station(client.product):
-        entities.extend([
-            ChargingEntity(client),
-            MainErrorEntity(client),
-        ])
+        entities.extend(
+            [
+                ChargingEntity(client),
+                MainErrorEntity(client),
+            ]
+        )
         if is_delta(client.product):
-            entities.extend([
-                ExtraErrorEntity(client, client.bms.pipe(select_bms(
-                    1), ops.share()), "battery_error", "Extra1 status", 1),
-                ExtraErrorEntity(client, client.bms.pipe(select_bms(
-                    2), ops.share()), "battery_error", "Extra2 status", 2),
-                InputEntity(client, client.inverter, "ac_in_type", "AC input"),
-                InputEntity(client, client.mppt, "dc_in_state", "DC input"),
-                CustomChargeEntity(client, client.inverter,
-                                   "ac_in_limit_switch", "AC custom charge speed"),
-            ])
+            entities.extend(
+                [
+                    ExtraErrorEntity(
+                        client,
+                        client.bms.pipe(select_bms(1), ops.share()),
+                        "battery_error",
+                        "Extra1 status",
+                        1,
+                    ),
+                    ExtraErrorEntity(
+                        client,
+                        client.bms.pipe(select_bms(2), ops.share()),
+                        "battery_error",
+                        "Extra2 status",
+                        2,
+                    ),
+                    InputEntity(client, client.inverter, "ac_in_type", "AC input"),
+                    InputEntity(client, client.mppt, "dc_in_state", "DC input"),
+                    CustomChargeEntity(
+                        client,
+                        client.inverter,
+                        "ac_in_limit_switch",
+                        "AC custom charge speed",
+                    ),
+                ]
+            )
         if is_river(client.product):
-            entities.extend([
-                ExtraErrorEntity(client, client.bms.pipe(select_bms(
-                    1), ops.share()), "battery_error", "Extra status", 1),
-                InputEntity(client, client.inverter, "in_type", "Input"),
-            ])
+            entities.extend(
+                [
+                    ExtraErrorEntity(
+                        client,
+                        client.bms.pipe(select_bms(1), ops.share()),
+                        "battery_error",
+                        "Extra status",
+                        1,
+                    ),
+                    InputEntity(client, client.inverter, "in_type", "Input"),
+                ]
+            )
 
     async_add_entities(entities)
 
@@ -82,16 +110,24 @@ class ChargingEntity(BinarySensorEntity, EcoFlowBaseEntity):
 
         if not self._in_power:
             self._attr_is_on = False
-        elif (self._battery_level is not None) and (self._battery_level_max is not None) and (self._battery_level_max < self._battery_level):
+        elif (
+            (self._battery_level is not None)
+            and (self._battery_level_max is not None)
+            and (self._battery_level_max < self._battery_level)
+        ):
             self._attr_is_on = False
-        elif (self._in_power is not None) and (self._out_power is not None) and (self._in_power <= self._out_power):
+        elif (
+            (self._in_power is not None)
+            and (self._out_power is not None)
+            and (self._in_power <= self._out_power)
+        ):
             self._attr_is_on = False
         else:
             self._attr_is_on = True
 
 
 class CustomChargeEntity(BaseEntity):
-    _attr_entity_category = EntityCategory.CONFIG
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def _on_updated(self, data: dict[str, Any]):
         self._attr_is_on = data[self._key] == 2
@@ -116,7 +152,14 @@ class MainErrorEntity(BinarySensorEntity, EcoFlowBaseEntity):
 
     @property
     def is_on(self):
-        return next((True for x in self._attr_extra_state_attributes.values() if x not in [0, 6]), False)
+        return next(
+            (
+                True
+                for x in self._attr_extra_state_attributes.values()
+                if x not in [0, 6]
+            ),
+            False,
+        )
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()

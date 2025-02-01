@@ -2,44 +2,66 @@ from typing import Any
 
 from homeassistant.components.number import NumberEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import ELECTRIC_CURRENT_AMPERE, PERCENTAGE, POWER_WATT
+from homeassistant.const import UnitOfPower, UnitOfElectricCurrent, PERCENTAGE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import (DOMAIN, EcoFlowConfigEntity, EcoFlowEntity, HassioEcoFlowClient,
-               request)
-from .ecoflow import (is_delta, is_delta_max, is_delta_mini, is_delta_pro,
-                      is_power_station, send)
+from . import DOMAIN, EcoFlowConfigEntity, EcoFlowEntity, HassioEcoFlowClient, request
+from .ecoflow import (
+    is_delta,
+    is_delta_max,
+    is_delta_mini,
+    is_delta_pro,
+    is_power_station,
+    send,
+)
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+):
     client: HassioEcoFlowClient = hass.data[DOMAIN][entry.entry_id]
     entities = []
 
     if is_power_station(client.product):
-        entities.extend([
-            DcInCurrentEntity(client, "dc_in_current_config",
-                              "Car input"),
-            MaxLevelEntity(client, client.ems,
-                           "battery_level_max", "Charge level"),
-        ])
+        entities.extend(
+            [
+                DcInCurrentEntity(client, "dc_in_current_config", "Car input"),
+                MaxLevelEntity(client, client.ems, "battery_level_max", "Charge level"),
+            ]
+        )
         if is_delta(client.product):
-            entities.extend([
-                ChargeWattsEntity(client, client.inverter,
-                                  "ac_in_limit_custom", "AC charge speed"),
-                LcdBrightnessEntity(client, client.pd,
-                                    "lcd_brightness", "Screen brightness"),
-                MinLevelEntity(client, client.ems,
-                            "battery_level_min", "Discharge level"),
-            ])
+            entities.extend(
+                [
+                    ChargeWattsEntity(
+                        client, client.inverter, "ac_in_limit_custom", "AC charge speed"
+                    ),
+                    LcdBrightnessEntity(
+                        client, client.pd, "lcd_brightness", "Screen brightness"
+                    ),
+                    MinLevelEntity(
+                        client, client.ems, "battery_level_min", "Discharge level"
+                    ),
+                ]
+            )
             if is_delta_pro(client.product):
-                entities.extend([
-                    GenerateStartEntity(
-                        client, client.ems, "generator_level_start", "Smart generator auto on"),
-                    GenerateStopEntity(
-                        client, client.ems, "generator_level_stop", "Smart generator auto off"),
-                ])
+                entities.extend(
+                    [
+                        GenerateStartEntity(
+                            client,
+                            client.ems,
+                            "generator_level_start",
+                            "Smart generator auto on",
+                        ),
+                        GenerateStopEntity(
+                            client,
+                            client.ems,
+                            "generator_level_stop",
+                            "Smart generator auto off",
+                        ),
+                    ]
+                )
 
     async_add_entities(entities)
 
@@ -56,7 +78,7 @@ class ChargeWattsEntity(BaseEntity):
     _attr_native_max_value = 1500
     _attr_native_min_value = 200
     _attr_native_step = 100
-    _attr_native_unit_of_measurement = POWER_WATT
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
 
     async def async_set_native_value(self, value: float):
         self._client.tcp.write(send.set_ac_in_limit(int(value)))
@@ -99,15 +121,20 @@ class DcInCurrentEntity(NumberEntity, EcoFlowConfigEntity):
     _attr_native_max_value = 8
     _attr_native_min_value = 4
     _attr_native_step = 2
-    _attr_native_unit_of_measurement = ELECTRIC_CURRENT_AMPERE
+    _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
 
     async def async_set_native_value(self, value: float):
-        self._client.tcp.write(send.set_dc_in_current(
-            self._client.product, int(value * 1000)))
+        self._client.tcp.write(
+            send.set_dc_in_current(self._client.product, int(value * 1000))
+        )
 
     async def async_update(self):
         try:
-            value = await request(self._client.tcp, send.get_dc_in_current(self._client.product), self._client.dc_in_current_config)
+            value = await request(
+                self._client.tcp,
+                send.get_dc_in_current(self._client.product),
+                self._client.dc_in_current_config,
+            )
         except:
             return
         self._client.diagnostics["dc_in_current_config"] = value
@@ -148,8 +175,7 @@ class LcdBrightnessEntity(BaseEntity):
         self._attr_native_value = data[self._key] & 0x7F
 
     async def async_set_native_value(self, value: float):
-        self._client.tcp.write(send.set_lcd(
-            self._client.product, light=int(value)))
+        self._client.tcp.write(send.set_lcd(self._client.product, light=int(value)))
 
 
 class MaxLevelEntity(BaseEntity):
@@ -160,8 +186,7 @@ class MaxLevelEntity(BaseEntity):
     _attr_native_unit_of_measurement = PERCENTAGE
 
     async def async_set_native_value(self, value: float):
-        self._client.tcp.write(send.set_level_max(
-            self._client.product, int(value)))
+        self._client.tcp.write(send.set_level_max(self._client.product, int(value)))
 
 
 class MinLevelEntity(BaseEntity):
